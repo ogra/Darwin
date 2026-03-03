@@ -180,16 +180,20 @@ void PianoRollGridWidget::setProject(Project* project)
     
     if (m_project) {
         auto connectNote = [this](Note* note) {
-            connect(note, &Note::changed, this, QOverload<>::of(&PianoRollGridWidget::update));
+            connect(note, &Note::changed, this, [this](){ update(); });
         };
 
         auto connectClip = [this, connectNote](Clip* clip) {
-            connect(clip, &Clip::changed, this, QOverload<>::of(&PianoRollGridWidget::update));
+            connect(clip, &Clip::changed, this, [this](){ update(); });
             connect(clip, &Clip::noteAdded, this, [this, connectNote](Note* note) {
                 connectNote(note);
                 update();
             });
-            connect(clip, &Clip::noteRemoved, this, [this](Note*){ update(); });
+            connect(clip, &Clip::noteRemoved, this, [this](Note* note){
+                if (m_selectedNote == note) m_selectedNote = nullptr;
+                if (m_selectedNotes.contains(note)) m_selectedNotes.removeAll(note);
+                update();
+            });
             
             for (Note* note : clip->notes()) {
                 connectNote(note);
@@ -197,7 +201,7 @@ void PianoRollGridWidget::setProject(Project* project)
         };
 
         auto connectTrack = [this, connectClip](Track* track) {
-            connect(track, &Track::propertyChanged, this, QOverload<>::of(&PianoRollGridWidget::update));
+            connect(track, &Track::propertyChanged, this, [this](){ update(); });
             connect(track, &Track::clipAdded, this, [this, connectClip](Clip* clip) {
                 connectClip(clip);
                 update();
@@ -228,31 +232,12 @@ void PianoRollGridWidget::setProject(Project* project)
 
 void PianoRollGridWidget::setActiveClip(Clip* clip)
 {
-    // Disconnect old clip signals if needed
-    if (m_activeClip) {
-        disconnect(m_activeClip, nullptr, this, nullptr);
-    }
-    
     m_activeClip = clip;
     m_selectedNote = nullptr;
     m_selectedNotes.clear();
     
-    if (m_activeClip) {
-        connect(m_activeClip, &Clip::changed, this, [this](){ update(); });
-        connect(m_activeClip, &Clip::noteAdded, this, [this](Note* note){ 
-            connect(note, &Note::changed, this, [this](){ update(); });
-            update(); 
-        });
-        connect(m_activeClip, &Clip::noteRemoved, this, [this](Note* note){
-            if (m_selectedNote == note) m_selectedNote = nullptr;
-            update();
-        });
-
-        // 既存のノートにも接続
-        for (Note* note : m_activeClip->notes()) {
-            connect(note, &Note::changed, this, [this](){ update(); });
-        }
-    }
+    // 接続は setProject におけるプロジェクト全体の監視ロジックに一元化されているため、
+    // ここで個別に connect/disconnect する必要はありません。
     
     update();
 }

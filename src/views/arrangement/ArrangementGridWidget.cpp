@@ -12,6 +12,7 @@
 #include "models/Project.h"
 #include "models/Track.h"
 #include "models/Clip.h"
+#include "models/Note.h"
 #include <QScrollArea>
 #include <QScrollBar>
 #include "common/Constants.h"
@@ -55,30 +56,50 @@ void ArrangementGridWidget::setProject(Project* project)
     };
 
     connect(m_project, &Project::trackAdded, this, [this, updateSize](Track* track) {
-        // トラック追加時、そのトラックのクリップ変更を監視
-        connect(track, &Track::clipAdded, this, [this](Clip* clip){ 
-            connect(clip, &Clip::changed, this, QOverload<>::of(&ArrangementGridWidget::update));
-            updateDynamicSize(); 
+        auto connectClip = [this](Clip* clip) {
+            connect(clip, &Clip::changed, this, [this](){ update(); });
+            connect(clip, &Clip::noteAdded, this, [this](Note* note) {
+                connect(note, &Note::changed, this, [this](){ update(); });
+                update();
+            });
+            for (Note* note : clip->notes()) {
+                connect(note, &Note::changed, this, [this](){ update(); });
+            }
+            updateDynamicSize();
+        };
+
+        connect(track, &Track::clipAdded, this, [this, connectClip](Clip* clip){ 
+            connectClip(clip);
         });
         connect(track, &Track::clipRemoved, this, [this](Clip*){ updateDynamicSize(); });
         updateSize();
     });
     connect(m_project, &Project::trackRemoved, this, [updateSize](Track*){ updateSize(); });
-    connect(m_project, &Project::exportRangeChanged, this, QOverload<>::of(&QWidget::update));
+    connect(m_project, &Project::exportRangeChanged, this, [this](){ update(); });
     connect(m_project, &Project::folderStructureChanged, this, [updateSize]() { updateSize(); });
     
-    // 既存トラックのクリップ変更も監視
+    // 既存トラックの監視
     for (int i = 0; i < m_project->trackCount(); ++i) {
         Track* track = m_project->trackAt(i);
-        connect(track, &Track::clipAdded, this, [this](Clip* clip){ 
-            connect(clip, &Clip::changed, this, QOverload<>::of(&ArrangementGridWidget::update));
-            updateDynamicSize(); 
+        auto connectClip = [this](Clip* clip) {
+            connect(clip, &Clip::changed, this, [this](){ update(); });
+            connect(clip, &Clip::noteAdded, this, [this](Note* note) {
+                connect(note, &Note::changed, this, [this](){ update(); });
+                update();
+            });
+            for (Note* note : clip->notes()) {
+                connect(note, &Note::changed, this, [this](){ update(); });
+            }
+            updateDynamicSize();
+        };
+
+        connect(track, &Track::clipAdded, this, [this, connectClip](Clip* clip){ 
+            connectClip(clip);
         });
         connect(track, &Track::clipRemoved, this, [this](Clip*){ updateDynamicSize(); });
         
-        // 既存のクリップにも接続
         for (Clip* clip : track->clips()) {
-            connect(clip, &Clip::changed, this, QOverload<>::of(&ArrangementGridWidget::update));
+            connectClip(clip);
         }
     }
     
