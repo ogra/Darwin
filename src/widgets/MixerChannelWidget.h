@@ -1,0 +1,49 @@
+#pragma once
+#include <QWidget>
+#include <QTimer>
+
+class Track;
+class LevelMeterWidget;
+class VST3Scanner;
+class QVBoxLayout;
+class VST3PluginInstance;
+class QPushButton;
+class QGraphicsOpacityEffect;
+
+class MixerChannelWidget : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit MixerChannelWidget(int trackNumber, const QString &trackName, Track* track = nullptr, QWidget *parent = nullptr);
+
+    // Master向け
+    void setLevel(float left, float right);
+
+public slots:
+    void updateFxSlots();
+    void applyTheme();
+
+private slots:
+    void showFxPluginMenu();
+
+signals:
+    void pluginEditorRequested(VST3PluginInstance* plugin);
+    void folderToggleRequested(Track* track);
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
+private:
+    void animateFxBurst(QPushButton* btn);
+    void animateFxAppear(int fxIndex);
+    
+    Track* m_track;
+    LevelMeterWidget* m_levelMeterL;
+    LevelMeterWidget* m_levelMeterR;
+    
+    QWidget* m_fxContainer;
+    QVBoxLayout* m_fxLayout;
+    VST3Scanner* m_scanner;
+    
+    int m_pendingFxHighlight = -1;
+};

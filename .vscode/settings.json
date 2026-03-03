@@ -1,0 +1,10 @@
+{
+    "git.ignoredRepositories": [
+        "${workspaceRoot}/build/_deps/vst3sdk-src",
+        "${workspaceRoot}/build/_deps/vst3sdk-src/doc",
+        "**/build/**"
+    ],
+    "git.scanRepositories": [
+        "${workspaceRoot}"
+    ]
+}

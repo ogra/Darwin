@@ -1,0 +1,64 @@
+# ビルドディレクトリ・CMake生成ファイル
+build/
+build_*/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# ビルドログ（ルートに出力される場合）
+build_log.txt
+build_log2.txt
+build_output.txt
+
+# Qt 自動生成ファイル
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+*.moc
+*_autogen/
+
+# IDE / VSCode
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+.idea/
+*.swp
+*.swo
+*.suo
+*.user
+
+# オブジェクトファイル・バイナリ
+*.o
+*.obj
+*.exe
+*.dll
+*.lib
+*.a
+*.ilk
+*.pdb
+*.exp
+*.idb
+
+# VST3 SDK（buildフォルダ外に配置した場合）
+VST3_SDK/
+vst3sdk/
+
+# ユーザーのプロジェクトファイル（個人データを除外）
+Projects/
+.agents/
+website/
+
+# OS 固有ファイル
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# 一時ファイル
+*.tmp
+*.log
+*.bak
