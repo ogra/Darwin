@@ -286,6 +286,42 @@ void Track::removeFxPlugin(int index)
     }
 }
 
+VST3PluginInstance* Track::takeFxPlugin(int index)
+{
+    VST3PluginInstance* instance = nullptr;
+    if (index >= 0 && index < m_fxPlugins.size()) {
+        QMutexLocker lock(&m_pluginMutex);
+        instance = m_fxPlugins.takeAt(index);
+        emit propertyChanged();
+    }
+    return instance;
+}
+
+void Track::insertFxPlugin(int index, VST3PluginInstance* plugin)
+{
+    if (!plugin) return;
+    
+    plugin->setParent(this);
+    
+    QMutexLocker lock(&m_pluginMutex);
+    index = qBound(0, index, m_fxPlugins.size());
+    m_fxPlugins.insert(index, plugin);
+    emit propertyChanged();
+}
+
+void Track::moveFxPlugin(int fromIndex, int toIndex)
+{
+    if (fromIndex < 0 || fromIndex >= m_fxPlugins.size() || 
+        toIndex < 0 || toIndex > m_fxPlugins.size() || 
+        fromIndex == toIndex) {
+        return;
+    }
+    
+    QMutexLocker lock(&m_pluginMutex);
+    m_fxPlugins.move(fromIndex, toIndex);
+    emit propertyChanged();
+}
+
 void Track::clearFxPlugins()
 {
     QList<VST3PluginInstance*> toDelete;

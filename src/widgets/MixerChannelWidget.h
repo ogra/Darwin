@@ -32,6 +32,10 @@ signals:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private:
     void animateFxBurst(QPushButton* btn);
@@ -46,4 +50,14 @@ private:
     VST3Scanner* m_scanner;
     
     int m_pendingFxHighlight = -1;
+
+    // Drag & Drop UI state
+    QWidget* m_dragGhost = nullptr;
+    QWidget* m_dropIndicator = nullptr;
+    QPoint m_dragOffset;
+    bool m_isDraggingFx = false;
+    VST3PluginInstance* m_dragFxPlugin = nullptr;
+    int m_dragInsertIndex = -1;
+    void beginFxDrag(QPushButton* btn, int index);
+    void finishFxDrag();
 };

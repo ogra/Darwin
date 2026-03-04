@@ -196,7 +196,7 @@ Track* Project::addFolderTrack(const QString& name)
 
     Track* folder = new Track(folderName, this);
     folder->setIsFolder(true);
-    folder->setVolume(0.8);
+    folder->setVolume(1.0);
     m_tracks.append(folder);
 
     connect(folder, &Track::propertyChanged, this, &Project::modified);

@@ -84,6 +84,9 @@ public:
     bool addFxPlugin(const QString& pluginPath);
     void removeFxPlugin(int index);
     void clearFxPlugins();
+    VST3PluginInstance* takeFxPlugin(int index);
+    void insertFxPlugin(int index, VST3PluginInstance* plugin);
+    void moveFxPlugin(int fromIndex, int toIndex);
     const QList<VST3PluginInstance*>& fxPlugins() const { return m_fxPlugins; }
 
     // シリアライズ

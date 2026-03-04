@@ -21,7 +21,9 @@
 #include <QGraphicsOpacityEffect>
 #include <QPropertyAnimation>
 #include <QTimer>
-#include <cmath>
+#include <QDrag>
+#include <QMimeData>
+#include <QUrl>
 #include "../plugins/VST3Scanner.h"
 #include "../plugins/VST3PluginInstance.h"
 #include "common/ThemeManager.h"
@@ -41,6 +43,8 @@ MixerChannelWidget::MixerChannelWidget(int trackNumber, const QString &trackName
     , m_scanner(nullptr)
 {
     connect(&Darwin::ThemeManager::instance(), &Darwin::ThemeManager::themeChanged, this, &MixerChannelWidget::applyTheme);
+
+    setAcceptDrops(true);
 
     setFixedWidth(120); // Matched closely to image
     
@@ -67,16 +71,27 @@ MixerChannelWidget::MixerChannelWidget(int trackNumber, const QString &trackName
     faderSection->setObjectName("faderSection");
     faderSection->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
 
-    // フォルダトラックは背景を少し変えてグループ感を出す
     if (isFolder) {
+        // 背景色(パネル背景)とトラックカラーを混合し、透明な薄い色を表現する
+        QColor baseColor = m_track->color();
+        QColor bg = Darwin::ThemeManager::instance().panelBackgroundColor();
+        QColor lightCol(
+            (baseColor.red() * 15 + bg.red() * 85) / 100,
+            (baseColor.green() * 15 + bg.green() * 85) / 100,
+            (baseColor.blue() * 15 + bg.blue() * 85) / 100
+        );
+        QColor lightBorder(
+            (baseColor.red() * 30 + bg.red() * 70) / 100,
+            (baseColor.green() * 30 + bg.green() * 70) / 100,
+            (baseColor.blue() * 30 + bg.blue() * 70) / 100
+        );
         faderSection->setStyleSheet(QString(
             "#faderSection {"
             "  background-color: %1;"
             "  border: 1px solid %2;"
             "  border-radius: 12px;"
             "}"
-        ).arg(m_track->color().lighter(185).name(),
-              m_track->color().lighter(160).name()));
+        ).arg(lightCol.name(), lightBorder.name()));
     } else {
         faderSection->setStyleSheet(QString(
             "#faderSection {"
@@ -98,7 +113,8 @@ MixerChannelWidget::MixerChannelWidget(int trackNumber, const QString &trackName
     FaderWidget* fader = new FaderWidget(faderSection);
     if (m_track) {
         // linear gain → dB → スライダー位置 に変換して初期値を設定
-        float initDb  = FaderWidget::linearToDb(static_cast<float>(m_track->volume()));
+        float vol = static_cast<float>(m_track->volume());
+        float initDb = FaderWidget::linearToDb(vol);
         float initPos = FaderWidget::dbToPosition(initDb);
         fader->setValue(initPos);
         // スライダー位置(0〜1) → dB → linear gain → Track::setVolume
@@ -325,6 +341,26 @@ void MixerChannelWidget::applyTheme()
                 "}"
             ).arg(Darwin::ThemeManager::instance().panelBackgroundColor().name(),
                   Darwin::ThemeManager::instance().borderColor().name()));
+        } else {
+            QColor baseColor = m_track->color();
+            QColor bg = Darwin::ThemeManager::instance().panelBackgroundColor();
+            QColor lightCol(
+                (baseColor.red() * 15 + bg.red() * 85) / 100,
+                (baseColor.green() * 15 + bg.green() * 85) / 100,
+                (baseColor.blue() * 15 + bg.blue() * 85) / 100
+            );
+            QColor lightBorder(
+                (baseColor.red() * 30 + bg.red() * 70) / 100,
+                (baseColor.green() * 30 + bg.green() * 70) / 100,
+                (baseColor.blue() * 30 + bg.blue() * 70) / 100
+            );
+            faderSection->setStyleSheet(QString(
+                "#faderSection {"
+                "  background-color: %1;"
+                "  border: 1px solid %2;"
+                "  border-radius: 12px;"
+                "}"
+            ).arg(lightCol.name(), lightBorder.name()));
         }
     }
 
@@ -569,10 +605,29 @@ bool MixerChannelWidget::eventFilter(QObject *watched, QEvent *event)
             });
             return true;
         }
+    } else if (event->type() == QEvent::MouseMove) {
+        QMouseEvent* me = static_cast<QMouseEvent*>(event);
+        if (me->buttons() & Qt::LeftButton) {
+            qint64 pressTime = btn->property("pressTime").toLongLong();
+            if (pressTime > 0) {
+                // Not a long press trigger, but a drag trigger
+                QPoint pressPos = btn->property("pressPos").toPoint();
+                if ((me->pos() - pressPos).manhattanLength() > QApplication::startDragDistance()) {
+                    bool ok;
+                    int idx = btn->property("fxIndex").toInt(&ok);
+                    if (ok && m_track) {
+                        btn->setProperty("pressTime", 0);
+                        beginFxDrag(btn, idx);
+                        return true;
+                    }
+                }
+            }
+        }
     } else if (event->type() == QEvent::MouseButtonPress) {
         QMouseEvent* me = static_cast<QMouseEvent*>(event);
         if (me->button() == Qt::LeftButton) {
             btn->setProperty("pressTime", QDateTime::currentMSecsSinceEpoch());
+            btn->setProperty("pressPos", me->pos());
             btn->setProperty("longPressTriggered", false);
         }
     } else if (event->type() == QEvent::MouseButtonRelease) {
@@ -599,6 +654,244 @@ bool MixerChannelWidget::eventFilter(QObject *watched, QEvent *event)
     }
 
     return QWidget::eventFilter(watched, event);
+}
+
+// ── FX Drag & Drop ───────────────────────────────────────────────
+
+void MixerChannelWidget::beginFxDrag(QPushButton* btn, int index)
+{
+    if (!m_track || index < 0 || index >= m_track->fxPlugins().size()) return;
+
+    m_isDraggingFx = true;
+    m_dragFxPlugin = m_track->fxPlugins().at(index);
+    m_dragInsertIndex = index;
+
+    // 半透明にする
+    auto* dimEffect = new QGraphicsOpacityEffect(btn);
+    dimEffect->setOpacity(0.3);
+    btn->setGraphicsEffect(dimEffect);
+
+    // ゴーストを作成
+    m_dragGhost = new QWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint);
+    m_dragGhost->setAttribute(Qt::WA_TranslucentBackground);
+    m_dragGhost->setFixedSize(btn->width(), btn->height());
+
+    QPixmap pixmap(btn->size() * btn->devicePixelRatioF());
+    pixmap.setDevicePixelRatio(btn->devicePixelRatioF());
+    pixmap.fill(Qt::transparent);
+    btn->render(&pixmap);
+
+    QLabel* ghostLabel = new QLabel(m_dragGhost);
+    ghostLabel->setPixmap(pixmap);
+    ghostLabel->setFixedSize(btn->size());
+    ghostLabel->move(0, 0);
+
+    bool isDark = Darwin::ThemeManager::instance().isDarkMode();
+    m_dragGhost->setStyleSheet(QString(
+        "background-color: %1; border: 2px solid #3b82f6; border-radius: 2px;"
+    ).arg(isDark ? "rgba(30,41,59,220)" : "rgba(241,245,249,230)"));
+
+    QPoint btnGlobal = btn->mapToGlobal(QPoint(0, 0));
+    m_dragOffset = QCursor::pos() - btnGlobal;
+    m_dragGhost->move(QCursor::pos() - m_dragOffset);
+    m_dragGhost->show();
+
+    // 浮き上がりアニメーション
+    m_dragGhost->setWindowOpacity(0.0);
+    auto* floatAnim = new QPropertyAnimation(m_dragGhost, "windowOpacity", m_dragGhost);
+    floatAnim->setDuration(200);
+    floatAnim->setStartValue(0.0);
+    floatAnim->setEndValue(0.92);
+    floatAnim->setEasingCurve(QEasingCurve::OutCubic);
+    floatAnim->start(QAbstractAnimation::DeleteWhenStopped);
+
+    m_dropIndicator = new QWidget(m_fxContainer);
+    m_dropIndicator->setFixedHeight(3);
+    m_dropIndicator->setStyleSheet("background-color: #3b82f6; border-radius: 1px;");
+    m_dropIndicator->hide();
+
+    // QDrag 開始
+    QDrag* drag = new QDrag(this);
+    QMimeData* mimeData = new QMimeData;
+    
+    // Trackポインタとインデックスをシリアライズ
+    QByteArray encodedData;
+    QDataStream stream(&encodedData, QIODevice::WriteOnly);
+    stream << reinterpret_cast<quintptr>(m_track) << index;
+    mimeData->setData("application/x-darwin-fx-slot", encodedData);
+    drag->setMimeData(mimeData);
+
+    // 空のピックスマップを設定してOS標準のドラッグアイコンを非表示にする
+    QPixmap emptyPixmap(1, 1);
+    emptyPixmap.fill(Qt::transparent);
+    drag->setPixmap(emptyPixmap);
+
+    // マウスを離すまでブロック
+    drag->exec(Qt::MoveAction);
+
+    // ドロップ完了またはキャンセル時
+    finishFxDrag();
+    btn->setGraphicsEffect(nullptr);
+}
+
+void MixerChannelWidget::finishFxDrag()
+{
+    m_isDraggingFx = false;
+    m_dragFxPlugin = nullptr;
+    m_dragInsertIndex = -1;
+
+    if (m_dragGhost) {
+        auto* fadeOut = new QPropertyAnimation(m_dragGhost, "windowOpacity", m_dragGhost);
+        fadeOut->setDuration(150);
+        fadeOut->setStartValue(m_dragGhost->windowOpacity());
+        fadeOut->setEndValue(0.0);
+        fadeOut->setEasingCurve(QEasingCurve::InCubic);
+        connect(fadeOut, &QPropertyAnimation::finished, m_dragGhost, &QWidget::deleteLater);
+        fadeOut->start(QAbstractAnimation::DeleteWhenStopped);
+        m_dragGhost = nullptr;
+    }
+
+    if (m_dropIndicator) {
+        m_dropIndicator->deleteLater();
+        m_dropIndicator = nullptr;
+    }
+}
+
+void MixerChannelWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasFormat("application/x-darwin-fx-slot") && m_track) {
+        event->acceptProposedAction();
+        if (!m_dropIndicator) {
+            m_dropIndicator = new QWidget(m_fxContainer);
+            m_dropIndicator->setFixedHeight(3);
+            m_dropIndicator->setStyleSheet("background-color: #3b82f6; border-radius: 1px;");
+            m_dropIndicator->hide();
+        }
+    } else {
+        event->ignore();
+    }
+}
+
+void MixerChannelWidget::dragMoveEvent(QDragMoveEvent *event)
+{
+    if (event->mimeData()->hasFormat("application/x-darwin-fx-slot")) {
+        event->acceptProposedAction();
+
+        // fxContainer 内でのローカル座標に変換
+        QPoint localPos = m_fxContainer->mapFrom(this, event->position().toPoint());
+        
+        // ゴーストの更新 (別のMixerChannelへドラッグしている可能性もあるので、現在QDragをループ中の本人が親とは限らない)
+        // 今回のゴースト実装はトップレベルにあるため、OS標準のカーソル位置からゴーストを動かすのはbegin側で行うか、あるいはQDrag中にタイマーで行う必要がある。
+        // ここでは dropIndicator の位置のみ更新する
+
+        int insertIndex = 0;
+        int maxIndex = m_track->fxPlugins().size();
+        
+        QByteArray encodedData = event->mimeData()->data("application/x-darwin-fx-slot");
+        QDataStream stream(&encodedData, QIODevice::ReadOnly);
+        quintptr sourceTrackPtr;
+        int sourceIndex;
+        stream >> sourceTrackPtr >> sourceIndex;
+        Track* sourceTrack = reinterpret_cast<Track*>(sourceTrackPtr);
+
+        for (int i = 0; i < m_fxLayout->count() - 1; ++i) { // 最後の+ボタンは除く
+            QLayoutItem* item = m_fxLayout->itemAt(i);
+            if (item && item->widget()) {
+                QRect geo = item->widget()->geometry();
+                if (localPos.y() < geo.center().y()) {
+                    break;
+                }
+                insertIndex = i + 1;
+            }
+        }
+        
+        // 挿入インジケーター表示
+        if (m_dropIndicator) {
+            int indicatorY = 0;
+            if (insertIndex == 0) {
+                indicatorY = 0;
+            } else if (insertIndex <= maxIndex) {
+                QLayoutItem* prevItem = m_fxLayout->itemAt(insertIndex - 1);
+                if (prevItem && prevItem->widget()) {
+                    indicatorY = prevItem->widget()->geometry().bottom() + m_fxLayout->spacing() / 2 - 1;
+                }
+            } else {
+                 QLayoutItem* addBtnItem = m_fxLayout->itemAt(m_fxLayout->count() - 1);
+                 if (addBtnItem && addBtnItem->widget()) {
+                     indicatorY = addBtnItem->widget()->geometry().top() - m_fxLayout->spacing() / 2 - 1;
+                 }
+            }
+            m_dropIndicator->setGeometry(0, indicatorY, m_fxContainer->width(), 3);
+            m_dropIndicator->show();
+            m_dropIndicator->raise();
+        }
+    }
+}
+
+void MixerChannelWidget::dragLeaveEvent(QDragLeaveEvent *event)
+{
+    if (m_dropIndicator) {
+        m_dropIndicator->hide();
+    }
+    event->accept();
+}
+
+void MixerChannelWidget::dropEvent(QDropEvent *event)
+{
+    if (event->mimeData()->hasFormat("application/x-darwin-fx-slot") && m_track) {
+        QByteArray encodedData = event->mimeData()->data("application/x-darwin-fx-slot");
+        QDataStream stream(&encodedData, QIODevice::ReadOnly);
+        quintptr sourceTrackPtr;
+        int sourceIndex;
+        stream >> sourceTrackPtr >> sourceIndex;
+
+        Track* sourceTrack = reinterpret_cast<Track*>(sourceTrackPtr);
+        if (!sourceTrack) {
+            event->ignore();
+            return;
+        }
+
+        QPoint localPos = m_fxContainer->mapFrom(this, event->position().toPoint());
+
+        int insertIndex = 0;
+        int maxIndex = m_track->fxPlugins().size();
+
+        for (int i = 0; i < m_fxLayout->count() - 1; ++i) {
+            QLayoutItem* item = m_fxLayout->itemAt(i);
+            if (item && item->widget()) {
+                QRect geo = item->widget()->geometry();
+                if (localPos.y() < geo.center().y()) {
+                    break;
+                }
+                insertIndex = i + 1;
+            }
+        }
+
+        if (sourceTrack == m_track) {
+            // 同一トラック内での移動
+            int toIndex = insertIndex;
+            if (toIndex > sourceIndex) {
+                toIndex--; // 自分自身が抜ける分を調整
+            }
+            if (sourceIndex != toIndex) {
+                m_track->moveFxPlugin(sourceIndex, toIndex);
+            }
+        } else {
+            // トラック間での移動
+            VST3PluginInstance* fx = sourceTrack->takeFxPlugin(sourceIndex);
+            if (fx) {
+                m_track->insertFxPlugin(insertIndex, fx);
+            }
+        }
+
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+    
+    if (m_dropIndicator) {
+        m_dropIndicator->hide();
+    }
 }
 
 // ── Burst animation on FX delete ──────────────────────────────
