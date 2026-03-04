@@ -25,6 +25,7 @@ signals:
 
 public slots:
     void setPlayheadPosition(qint64 tickPosition);
+    void setPlaying(bool playing);
     void setActiveClip(Clip* clip);
     void setProject(Project* project);
     
@@ -51,6 +52,8 @@ private:
     void ensurePlayheadVisible();
     
     qint64 m_playheadPosition;
+    bool m_isPlaying = false;
+    float m_trailOpacity = 0.0f;
     Clip* m_activeClip;
     Project* m_project;
     QScrollArea* m_scrollArea = nullptr;

@@ -199,6 +199,15 @@ void ArrangementGridWidget::ensurePlayheadVisible()
     }
 }
 
+void ArrangementGridWidget::setPlaying(bool playing)
+{
+    m_isPlaying = playing;
+    if (!m_animTimer.isActive()) {
+        m_animTimer.start();
+    }
+    update();
+}
+
 void ArrangementGridWidget::setPlayheadPosition(qint64 tickPosition)
 {
     m_playheadPosition = tickPosition;

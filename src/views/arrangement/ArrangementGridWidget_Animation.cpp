@@ -261,6 +261,20 @@ void ArrangementGridWidget::tickAnimations()
     qint64 now = m_animClock.elapsed();
     bool anyActive = false;
     
+    // 軌跡のフェードアニメーション
+    const float fadeStep = 0.12f;
+    if (m_isPlaying) {
+        if (m_trailOpacity < 1.0f) {
+            m_trailOpacity = qMin(1.0f, m_trailOpacity + fadeStep);
+            anyActive = true;
+        }
+    } else {
+        if (m_trailOpacity > 0.0f) {
+            m_trailOpacity = qMax(0.0f, m_trailOpacity - fadeStep);
+            anyActive = true;
+        }
+    }
+
     QList<int> toRemove;
     for (auto it = m_clipAnims.begin(); it != m_clipAnims.end(); ++it) {
         ClipAnim& anim = it.value();

@@ -296,16 +296,22 @@ void MainWindow::setupUi()
     if (composeView->arrangementGrid()) {
         connect(m_playbackController, &PlaybackController::positionChanged,
                 composeView->arrangementGrid(), &ArrangementGridWidget::setPlayheadPosition);
+        connect(m_playbackController, &PlaybackController::playStateChanged,
+                composeView->arrangementGrid(), &ArrangementGridWidget::setPlaying);
         connect(composeView->arrangementGrid(), &ArrangementGridWidget::requestSeek,
                 m_playbackController, &PlaybackController::seekTo);
     }
     if (composeView->pianoRollGrid()) {
         connect(m_playbackController, &PlaybackController::positionChanged,
                 composeView->pianoRollGrid(), &PianoRollGridWidget::setPlayheadPosition);
+        connect(m_playbackController, &PlaybackController::playStateChanged,
+                composeView->pianoRollGrid(), &PianoRollGridWidget::setPlaying);
         connect(composeView->pianoRollGrid(), &PianoRollGridWidget::requestSeek,
                 m_playbackController, &PlaybackController::seekTo);
     }
     if (composeView->arrangementView() && composeView->arrangementView()->timelineWidget()) {
+        connect(m_playbackController, &PlaybackController::playStateChanged,
+                composeView->arrangementView()->timelineWidget(), &TimelineWidget::setPlaying);
         connect(composeView->arrangementView()->timelineWidget(), &TimelineWidget::requestSeek,
                 m_playbackController, &PlaybackController::seekTo);
     }

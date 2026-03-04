@@ -179,7 +179,7 @@
 
 - [ ] 再生ヘッドのアニメーション
     - [ ] 再生状態の判定ロジック追加
-    - [ ] TimelineWidget、ArrangementGridWidget、PianoRollGridWidgetにおけるベジェ曲線描画
+    - [ ] TimelineWidget、ArrangementGridWidget、PianoRollGridWidgetにおけるグラデーション軌跡描画
 
 ---
 **凡例**: [ ] 未着手 / [/] 進行中 / [x] 完了

@@ -26,6 +26,15 @@ void TimelineWidget::setProject(Project* project)
     update();
 }
 
+void TimelineWidget::setPlaying(bool playing)
+{
+    m_isPlaying = playing;
+    if (!m_flagAnimTimer.isActive()) {
+        m_flagAnimTimer.start();
+    }
+    update();
+}
+
 /**
  * @brief トラックの変更をコード表記更新に接続する
  *
@@ -250,8 +259,27 @@ void TimelineWidget::paintEvent(QPaintEvent* event)
     if (m_project) {
         double playheadX = m_project->playheadPosition() * Darwin::PIXELS_PER_TICK * m_zoomLevel;
         p.setRenderHint(QPainter::Antialiasing, true);
+
+        // 再生中の「光の軌跡（モーションブラー）」演出
+        if (m_trailOpacity > 0.001f) {
+            double trailLen = 60.0;
+            QLinearGradient trailGradient(playheadX, 0, playheadX - trailLen, 0);
+            QColor trailColor = QColor("#FF3366");
+            trailColor.setAlpha(static_cast<int>(120 * m_trailOpacity));
+            trailGradient.setColorAt(0, trailColor);
+            trailGradient.setColorAt(1, Qt::transparent);
+
+            p.fillRect(QRectF(playheadX - trailLen, 0, trailLen, height()), trailGradient);
+            
+            // 軌跡の境界（微かな光の筋）
+            p.setPen(QPen(trailColor, 1));
+            p.drawLine(QPointF(playheadX - 1, 0), QPointF(playheadX - 1, height()));
+        }
+
+        // メインの再生ヘッド線
         p.setPen(QPen(QColor("#FF3366"), 2));
         p.drawLine(QPointF(playheadX, 0), QPointF(playheadX, height()));
+        
         p.setRenderHint(QPainter::Antialiasing, false);
     }
 
@@ -663,25 +691,40 @@ void TimelineWidget::startFlagPlantAnim(qint64 flagTick)
 
 void TimelineWidget::tickFlagAnimations()
 {
-    if (m_flagPlantAnims.isEmpty()) {
-        m_flagAnimTimer.stop();
-        return;
-    }
+    bool animating = false;
 
-    qint64 now = m_flagAnimClock.elapsed();
-    const float duration = 350.0f; // ms
-
-    for (int i = m_flagPlantAnims.size() - 1; i >= 0; --i) {
-        float elapsed = static_cast<float>(now - m_flagPlantAnims[i].startMs);
-        m_flagPlantAnims[i].progress = qBound(0.0f, elapsed / duration, 1.0f);
-        if (m_flagPlantAnims[i].progress >= 1.0f) {
-            m_flagPlantAnims.removeAt(i);
+    // 軌跡のフェードアニメーション
+    const float fadeStep = 0.12f; // フェード速度
+    if (m_isPlaying) {
+        if (m_trailOpacity < 1.0f) {
+            m_trailOpacity = qMin(1.0f, m_trailOpacity + fadeStep);
+            animating = true;
+        }
+    } else {
+        if (m_trailOpacity > 0.0f) {
+            m_trailOpacity = qMax(0.0f, m_trailOpacity - fadeStep);
+            animating = true;
         }
     }
 
-    update();
+    // フラッグ配置アニメーション
+    if (!m_flagPlantAnims.isEmpty()) {
+        animating = true;
+        qint64 now = m_flagAnimClock.elapsed();
+        const float duration = 350.0f; // ms
 
-    if (m_flagPlantAnims.isEmpty()) {
+        for (int i = m_flagPlantAnims.size() - 1; i >= 0; --i) {
+            float elapsed = static_cast<float>(now - m_flagPlantAnims[i].startMs);
+            m_flagPlantAnims[i].progress = qBound(0.0f, elapsed / duration, 1.0f);
+            if (m_flagPlantAnims[i].progress >= 1.0f) {
+                m_flagPlantAnims.removeAt(i);
+            }
+        }
+    }
+
+    if (animating) {
+        update();
+    } else {
         m_flagAnimTimer.stop();
     }
 }

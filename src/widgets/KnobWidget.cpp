@@ -84,7 +84,11 @@ void KnobWidget::paintEvent(QPaintEvent *event)
     // アクティブなアーク（値の部分）
     if (m_displayValue > 0.01f) {
         int activeSpan = static_cast<int>(m_displayValue * 270 * 16);
-        p.setPen(QPen(m_isDragging ? QColor("#FF6688") : QColor("#FF3366"), 2.5, Qt::SolidLine, Qt::RoundCap));
+        QColor activeColor = tm.accentColor();
+        if (m_isDragging) {
+            activeColor = activeColor.lighter(130);
+        }
+        p.setPen(QPen(activeColor, 2.5, Qt::SolidLine, Qt::RoundCap));
         p.drawArc(knobRect.adjusted(2, 2, -2, -2), arcStart, activeSpan);
     }
 

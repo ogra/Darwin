@@ -442,9 +442,10 @@ void MixerChannelWidget::updateFxSlots()
                     "QPushButton:focus { outline: none; }"
                 ).arg(bg, fg, border));
             } else {
-                QString bg = Darwin::ThemeManager::instance().isDarkMode() ? "#4c1d95" : "#ffe4e6";
-                QString fg = Darwin::ThemeManager::instance().isDarkMode() ? "#ddd6fe" : "#fb7185";
-                QString border = Darwin::ThemeManager::instance().isDarkMode() ? "#6d28d9" : "#fb7185";
+                const auto& tm = Darwin::ThemeManager::instance();
+                QString bg = tm.accentBgColor().name();
+                QString fg = tm.accentTextColor().name();
+                QString border = tm.accentBorderColor().name();
                 btn->setStyleSheet(QString(
                     "QPushButton {"
                     "  background-color: %1;" 
@@ -573,10 +574,10 @@ void MixerChannelWidget::showFxPluginMenu()
                 max-height: 6px;
             }
             QProgressBar::chunk {
-                background-color: #FF3366;
+                background-color: %6;
                 border-radius: 3px;
             }
-        )").arg(dlgBg, dlgBorder, dlgText, isDark ? "#0f172a" : "#f1f5f9", dlgSec));
+        )").arg(dlgBg, dlgBorder, dlgText, isDark ? "#0f172a" : "#f1f5f9", dlgSec, Darwin::ThemeManager::instance().accentColor().name()));
         progress.setValue(1); // Force show
         progress.show();
         QApplication::processEvents();

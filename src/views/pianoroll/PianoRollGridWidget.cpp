@@ -156,6 +156,15 @@ qint64 PianoRollGridWidget::snapTick(qint64 tick) const
     return ((tick + q / 2) / q) * q;
 }
 
+void PianoRollGridWidget::setPlaying(bool playing)
+{
+    m_isPlaying = playing;
+    if (!m_animTimer.isActive()) {
+        m_animTimer.start();
+    }
+    update();
+}
+
 void PianoRollGridWidget::setPlayheadPosition(qint64 tickPosition)
 {
     m_playheadPosition = tickPosition;
@@ -293,6 +302,20 @@ void PianoRollGridWidget::tickAnimations()
     qint64 now = m_animClock.elapsed();
     bool anyActive = false;
     
+    // 軌跡のフェードアニメーション
+    const float fadeStep = 0.12f;
+    if (m_isPlaying) {
+        if (m_trailOpacity < 1.0f) {
+            m_trailOpacity = qMin(1.0f, m_trailOpacity + fadeStep);
+            anyActive = true;
+        }
+    } else {
+        if (m_trailOpacity > 0.0f) {
+            m_trailOpacity = qMax(0.0f, m_trailOpacity - fadeStep);
+            anyActive = true;
+        }
+    }
+
     QList<Note*> toRemove;
     for (auto it = m_noteAnims.begin(); it != m_noteAnims.end(); ++it) {
         NoteAnim& anim = it.value();

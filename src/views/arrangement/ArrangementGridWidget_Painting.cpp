@@ -113,8 +113,24 @@ void ArrangementGridWidget::paintEvent(QPaintEvent *event)
     
     // Playhead
     double playheadX = m_playheadPosition * pixelsPerTick();
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    // 再生中の「光の軌跡（モーションブラー）」演出
+    if (m_trailOpacity > 0.001f) {
+        double trailLen = 80.0;
+        QLinearGradient trailGradient(playheadX, 0, playheadX - trailLen, 0);
+        QColor trailColor = QColor("#FF3366");
+        trailColor.setAlpha(static_cast<int>(100 * m_trailOpacity));
+        trailGradient.setColorAt(0, trailColor);
+        trailGradient.setColorAt(1, Qt::transparent);
+
+        p.fillRect(QRectF(playheadX - trailLen, 0, trailLen, height()), trailGradient);
+    }
+
+    // メインの再生ヘッド線
     p.setPen(QPen(QColor("#FF3366"), 2));
     p.drawLine(QPointF(playheadX, 0), QPointF(playheadX, widgetHeight));
+    p.setRenderHint(QPainter::Antialiasing, false);
 
     // ラバーバンド範囲選択の描画
     if (m_isRubberBanding && m_rubberBandRect.isValid()) {

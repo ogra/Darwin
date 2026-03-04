@@ -73,7 +73,7 @@ void FaderWidget::paintEvent(QPaintEvent *event)
     // Active track (from bottom up to display value)
     int activeHeight = static_cast<int>(trackHeight * m_displayValue);
     int activeY = margin + trackHeight - activeHeight;
-    p.setBrush(QColor("#FF3366")); // theme accent
+    p.setBrush(tm.accentColor()); // theme accent
     p.drawRoundedRect(xCenter - trackWidth / 2, activeY, trackWidth, activeHeight, 1, 1);
 
     // Fader Handle
@@ -87,8 +87,10 @@ void FaderWidget::paintEvent(QPaintEvent *event)
     
     // ドラッグ中はハンドルを少しハイライト
     if (m_isDragging) {
-        p.setPen(QPen(QColor("#FF3366"), 1.5));
-        p.setBrush(QColor("#3d1a28"));
+        p.setPen(QPen(tm.accentColor(), 1.5));
+        QColor highlightBg = tm.accentColor();
+        highlightBg.setAlpha(60);
+        p.setBrush(highlightBg);
     } else {
         p.setPen(QPen(tm.borderColor(), 1));
         p.setBrush(tm.panelBackgroundColor());

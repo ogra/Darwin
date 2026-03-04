@@ -13,6 +13,7 @@ class Project;
 class Track;
 class Clip;
 class Note;
+class PlaybackController;
 
 /**
  * @brief タイムライン（小節番号＋エクスポート範囲ハンドル＋フラッグ）ウィジェット
@@ -59,6 +60,7 @@ signals:
     void requestSeek(qint64 tickPosition);
 
 public slots:
+    void setPlaying(bool playing);
     void syncWidthToGrid(int gridWidth) {
         if (gridWidth > minimumWidth()) {
             setMinimumWidth(gridWidth);
@@ -95,6 +97,8 @@ private:
     QTimer* m_scrollTimer = nullptr;
     int m_scrollSpeed = 0;
     double m_zoomLevel = 1.0;  // ズーム倍率
+    bool m_isPlaying = false;
+    float m_trailOpacity = 0.0f; // 軌跡の不透明度 (0.0 - 1.0)
     enum DragMode { DragNone, DragStart, DragEnd, DragFlag, DragPlayhead };
     DragMode m_dragging = DragNone;
 

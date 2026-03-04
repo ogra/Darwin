@@ -108,6 +108,6 @@ void LevelMeterWidget::paintEvent(QPaintEvent *event)
     
     // Clip indicator if exceeded 1.0
     if (m_displayLevel > 1.0f) {
-        p.fillRect(0, 0, w, 3, QColor("#ef4444")); // Solid red block at top
+        p.fillRect(0, 0, w, 3, Darwin::ThemeManager::instance().accentColor()); // Solid accent block at top
     }
 }

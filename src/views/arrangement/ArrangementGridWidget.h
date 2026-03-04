@@ -48,6 +48,7 @@ signals:
 
 public slots:
     void setPlayheadPosition(qint64 tickPosition);
+    void setPlaying(bool playing);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -75,6 +76,8 @@ private:
     int visibleTrackIndex(Track* track) const;
     
     qint64 m_playheadPosition;
+    bool m_isPlaying = false;
+    float m_trailOpacity = 0.0f; // 軌跡の不透明度 (0.0 - 1.0)
     Project* m_project;
     
     // Interaction state

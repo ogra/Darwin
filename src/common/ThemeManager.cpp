@@ -90,4 +90,27 @@ QColor ThemeManager::borderColor() const
     return m_isDarkMode ? QColor("#334155") : QColor("#cbd5e1");
 }
 
+QColor ThemeManager::accentColor() const
+{
+    return QColor("#FF3366"); // プロジェクト標準のピンク系アクセント
+}
+
+QColor ThemeManager::accentBgColor() const
+{
+    // FXボタンなどの背景
+    return m_isDarkMode ? QColor("#4a0e1c") : QColor("#ffe4e6");
+}
+
+QColor ThemeManager::accentBorderColor() const
+{
+    // FXボタンなどの境界
+    return m_isDarkMode ? QColor("#881c34") : QColor("#fb7185");
+}
+
+QColor ThemeManager::accentTextColor() const
+{
+    // アクセント背景上のテキスト
+    return m_isDarkMode ? QColor("#fecdd3") : QColor("#e11d48");
+}
+
 } // namespace Darwin

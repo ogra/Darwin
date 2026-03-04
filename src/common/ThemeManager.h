@@ -40,6 +40,12 @@ public:
     QColor panelBackgroundColor() const;
     QColor borderColor() const;
 
+    // アクセントカラー関連
+    QColor accentColor() const;
+    QColor accentBgColor() const;
+    QColor accentBorderColor() const;
+    QColor accentTextColor() const;
+
 signals:
     // テーマ切り替え時に全ビューへ通知されるシグナル
     void themeChanged();
