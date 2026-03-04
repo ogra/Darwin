@@ -498,17 +498,38 @@ void ArrangementGridWidget::keyPressEvent(QKeyEvent *event)
         QJsonObject data = doc.object();
         if (data["type"].toString() != "darwin_clip") return;
 
-        int trackIndex = data["trackIndex"].toInt(0);
-        if (trackIndex < 0 || trackIndex >= m_project->trackCount()) return;
-
-        Track* track = m_project->trackAt(trackIndex);
         QJsonObject clipJson = data["clip"].toObject();
-
-        qint64 startTick = static_cast<qint64>(clipJson["startTick"].toDouble(0));
         qint64 durationTicks = static_cast<qint64>(clipJson["durationTicks"].toDouble(TICKS_PER_BAR));
 
-        // コピー元の直後にペースト
-        qint64 pasteStart = startTick + durationTicks;
+        // マウスカーソル位置からペースト先を計算
+        QPoint mousePos = mapFromGlobal(QCursor::pos());
+        int rowHeight = 100;
+        qint64 pasteStart = snapTick(static_cast<qint64>(mousePos.x() / pixelsPerTick()));
+
+        // マウス位置のトラック行を特定
+        QList<Track*> visTracks = visibleTracks();
+        int targetRow = qMax(0, mousePos.y() / rowHeight);
+
+        Track* track = nullptr;
+        if (targetRow < visTracks.size()) {
+            Track* candidate = visTracks.at(targetRow);
+            // フォルダトラックは対象外
+            if (candidate && !candidate->isFolder()) {
+                track = candidate;
+            }
+        }
+
+        // トラックが存在しない（範囲外 or フォルダ行）場合は新規作成
+        if (!track) {
+            int needed = targetRow - visTracks.size() + 1;
+            for (int i = 0; i < needed; ++i) {
+                track = m_project->addTrack();
+            }
+            if (!track) {
+                track = m_project->addTrack();
+            }
+            updateDynamicSize();
+        }
 
         Clip* newClip = track->addClip(pasteStart, durationTicks);
 
