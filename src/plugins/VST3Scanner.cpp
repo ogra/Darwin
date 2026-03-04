@@ -68,22 +68,34 @@ static PluginRawInfo extractPluginInfoSafe(const wchar_t* binPathW)
 {
     PluginRawInfo out;
 
-    // LOAD_WITH_ALTERED_SEARCH_PATH: DLL 依存関係を DLL と同じフォルダから優先解決
-    HMODULE hLib = LoadLibraryExW(binPathW, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
-    if (!hLib) {
-        qWarning() << "VST3スキャン: LoadLibrary 失敗 -"
-                   << QString::fromWCharArray(binPathW);
-        return out;
-    }
+    // ─── OS エラーダイアログ抑制 ───
+    // 依存 DLL が見つからない場合などに Windows がモーダルダイアログを表示し、
+    // アプリケーションが無応答になるのを防ぐ。
+    UINT prevErrorMode = SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX);
 
-    typedef IPluginFactory* (STDMETHODCALLTYPE *GetFactoryProc)();
-    GetFactoryProc getFactory = reinterpret_cast<GetFactoryProc>(
-        GetProcAddress(hLib, "GetPluginFactory"));
+    // ─── SEH 保護 ───
+    // LoadLibraryExW 自体を __try 内に入れることで、
+    // DllMain 内のクラッシュ（アクセス違反等）も捕捉する。
+    // C++ デストラクタを持つオブジェクトはこのブロック内では使用不可。
+    HMODULE hLib = nullptr;
+    bool sehCrashed = false;
 
-    if (getFactory) {
-        // ─── __try/__except: アクセス違反・不正メモリアクセスをここでキャッチ ───
-        // C++ デストラクタを持つオブジェクトはこのブロック内では使用不可
-        __try {
+    __try {
+        // LOAD_WITH_ALTERED_SEARCH_PATH: DLL 依存関係を DLL と同じフォルダから優先解決
+        hLib = LoadLibraryExW(binPathW, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        if (!hLib) {
+            // SEH ではなくロード失敗 → __except には入らない
+            SetErrorMode(prevErrorMode);
+            qWarning() << "VST3スキャン: LoadLibrary 失敗 -"
+                       << QString::fromWCharArray(binPathW);
+            return out;
+        }
+
+        typedef IPluginFactory* (STDMETHODCALLTYPE *GetFactoryProc)();
+        GetFactoryProc getFactory = reinterpret_cast<GetFactoryProc>(
+            GetProcAddress(hLib, "GetPluginFactory"));
+
+        if (getFactory) {
             IPluginFactory* factory = getFactory();
             if (factory) {
                 // ベンダー情報取得
@@ -154,13 +166,22 @@ static PluginRawInfo extractPluginInfoSafe(const wchar_t* binPathW)
                 factory->release();
                 out.success = true;
             }
-        } __except (EXCEPTION_EXECUTE_HANDLER) {
-            qWarning() << "VST3スキャン: プラグイン DLL がクラッシュしました。スキップします。"
-                       << QString::fromWCharArray(binPathW);
         }
+
+        // 正常完了: DLL を安全にアンロード
+        if (hLib) {
+            FreeLibrary(hLib);
+            hLib = nullptr;
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        sehCrashed = true;
+        qWarning() << "VST3スキャン: プラグイン DLL がクラッシュしました。スキップします。"
+                   << QString::fromWCharArray(binPathW);
+        // SEH 例外後の FreeLibrary は二次クラッシュを引き起こす可能性が高いため、
+        // 意図的にアンロードしない。プロセス終了時に OS が回収する。
     }
 
-    FreeLibrary(hLib);
+    SetErrorMode(prevErrorMode);
     return out;
 }
 

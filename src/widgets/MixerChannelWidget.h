@@ -1,6 +1,9 @@
 #pragma once
 #include <QWidget>
 #include <QTimer>
+#include <functional>
+
+struct VST3PluginInfo;
 
 class Track;
 class LevelMeterWidget;
@@ -40,6 +43,9 @@ protected:
 private:
     void animateFxBurst(QPushButton* btn);
     void animateFxAppear(int fxIndex);
+    void showFxPluginMenuAfterScan(
+        std::function<void(QVector<VST3PluginInfo>&)> loadUsageData,
+        std::function<void(const QString&)> saveUsageData);
     
     Track* m_track;
     LevelMeterWidget* m_levelMeterL;

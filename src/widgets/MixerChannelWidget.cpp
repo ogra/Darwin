@@ -25,6 +25,8 @@
 #include <QMimeData>
 #include <QUrl>
 #include <QSettings>
+#include <QtConcurrent/QtConcurrent>
+#include <QFutureWatcher>
 #include "../plugins/VST3Scanner.h"
 #include "../plugins/VST3PluginInstance.h"
 #include "common/ThemeManager.h"
@@ -542,14 +544,15 @@ void MixerChannelWidget::showFxPluginMenu()
         QString dlgBorder = isDark ? "#334155" : "#cbd5e1";
         QString dlgSec    = isDark ? "#94a3b8" : "#64748b";
 
-        QProgressDialog progress("Scanning VST3 Plugins...", QString(), 0, 0, this);
-        progress.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-        progress.setWindowModality(Qt::WindowModal);
-        progress.setMinimumDuration(0);
-        progress.setMinimumSize(280, 80);
-        progress.setMaximumSize(280, 80);
-        progress.setCancelButton(nullptr); // キャンセルボタン不要
-        progress.setStyleSheet(QString(R"(
+        QProgressDialog* progress = new QProgressDialog("Scanning VST3 Plugins...", QString(), 0, 0, this);
+        progress->setAttribute(Qt::WA_DeleteOnClose);
+        progress->setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+        progress->setWindowModality(Qt::WindowModal);
+        progress->setMinimumDuration(0);
+        progress->setMinimumSize(280, 80);
+        progress->setMaximumSize(280, 80);
+        progress->setCancelButton(nullptr); // キャンセルボタン不要
+        progress->setStyleSheet(QString(R"(
             QProgressDialog {
                 background-color: %1;
                 border: 1px solid %2;
@@ -578,21 +581,46 @@ void MixerChannelWidget::showFxPluginMenu()
                 border-radius: 3px;
             }
         )").arg(dlgBg, dlgBorder, dlgText, isDark ? "#0f172a" : "#f1f5f9", dlgSec, Darwin::ThemeManager::instance().accentColor().name()));
-        progress.setValue(1); // Force show
-        progress.show();
-        QApplication::processEvents();
+        progress->setValue(1); // Force show
+        progress->show();
 
         if (!m_scanner) {
             m_scanner = new VST3Scanner(this);
         }
         
-        // false = get all plugins, not just instruments
-        s_cachedPlugins = m_scanner->scan(false); 
-        s_hasScanned = true;
-        
-        progress.close();
-        QApplication::processEvents(); // Allow progress dialog to fully close and focus to return
+        // ワーカースレッドでスキャンを実行し、メインスレッドブロックを回避する。
+        // 不正な DLL が LoadLibrary/DllMain でクラッシュしても
+        // メインスレッドには直接影響しない。
+        QFutureWatcher<QVector<VST3PluginInfo>>* watcher =
+            new QFutureWatcher<QVector<VST3PluginInfo>>(this);
+
+        connect(watcher, &QFutureWatcher<QVector<VST3PluginInfo>>::finished,
+                this, [this, watcher, progress, loadUsageData, saveUsageData]() {
+            s_cachedPlugins = watcher->result();
+            s_hasScanned = true;
+            progress->close();
+
+            // スキャン完了後にメニューを表示
+            showFxPluginMenuAfterScan(loadUsageData, saveUsageData);
+
+            watcher->deleteLater();
+        });
+
+        QFuture<QVector<VST3PluginInfo>> future = QtConcurrent::run([this]() {
+            return m_scanner->scan(false);
+        });
+        watcher->setFuture(future);
+        return; // スキャン完了を待ってからメニュー表示
     }
+
+    showFxPluginMenuAfterScan(loadUsageData, saveUsageData);
+}
+
+void MixerChannelWidget::showFxPluginMenuAfterScan(
+    std::function<void(QVector<VST3PluginInfo>&)> loadUsageData,
+    std::function<void(const QString&)> saveUsageData)
+{
+    if (!m_track) return;
 
     // メニュー表示のたびに最新の利用回数を反映してソート
     loadUsageData(s_cachedPlugins);
