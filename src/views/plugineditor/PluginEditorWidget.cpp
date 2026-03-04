@@ -316,10 +316,10 @@ void PluginEditorWidget::updateScaleMode()
         if (m_container) {
             m_container->setFixedSize(logicalW, logicalH);
         }
-        // スクロールエリアのスクロールバーを非表示（常にフィット）
+        // スクロールバーを必要に応じて表示（パネルが小さい場合に対応）
         if (m_scrollArea) {
-            m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-            m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+            m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+            m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         }
         if (m_bitmapCaptureActive) {
             enterDirectMode();

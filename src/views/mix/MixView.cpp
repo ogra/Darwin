@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QFileInfo>
 #include <QFrame>
+#include <QSplitter>
 #include "../plugineditor/PluginEditorWidget.h"
 #include "../../plugins/VST3PluginInstance.h"
 #include "common/ThemeManager.h"
@@ -49,18 +50,21 @@ void MixView::setupUi()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    // メインコンテナ（ミキサー | インスペクター）
-    QWidget *centralContainer = new QWidget(this);
-    layout->addWidget(centralContainer);
-    QHBoxLayout *centralLayout = new QHBoxLayout(centralContainer);
-    centralLayout->setContentsMargins(0, 0, 0, 0);
-    centralLayout->setSpacing(0);
+    // メインコンテナ（ミキサー | インスペクター）を QSplitter に変更してリサイズ可能にする
+    QSplitter *centralSplitter = new QSplitter(Qt::Horizontal, this);
+    centralSplitter->setHandleWidth(2);
+    // スプリッターのハンドルプロパティ設定（背景に溶け込むように）
+    centralSplitter->setStyleSheet(QString(
+        "QSplitter::handle { background-color: %1; }"
+    ).arg(Darwin::ThemeManager::instance().borderColor().name()));
+    layout->addWidget(centralSplitter);
 
     // ミキサースクロール領域（左側）
-    QScrollArea *mixerScroll = new QScrollArea(centralContainer);
+    QScrollArea *mixerScroll = new QScrollArea(centralSplitter);
     mixerScroll->setWidgetResizable(true);
     mixerScroll->setFrameShape(QFrame::NoFrame);
     mixerScroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    mixerScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     QWidget *mixerContent = new QWidget(mixerScroll);
     // スタイルは applyTheme() で設定
@@ -70,19 +74,20 @@ void MixView::setupUi()
     m_mixerLayout->setAlignment(Qt::AlignLeft);
 
     mixerScroll->setWidget(mixerContent);
-    centralLayout->addWidget(mixerScroll);
+    centralSplitter->addWidget(mixerScroll);
 
     // インスペクター（右側）
-    QWidget *inspector = new QWidget(centralContainer);
-    inspector->setFixedWidth(INSPECTOR_WIDTH);
+    QWidget *inspectorContainer = new QWidget(centralSplitter);
+    inspectorContainer->setMinimumWidth(150); // スプリッターでリサイズ・縮小可能にするための最小幅
     // スタイルは applyTheme() で設定
-    m_inspectorLayout = new QVBoxLayout(inspector);
+
+    m_inspectorLayout = new QVBoxLayout(inspectorContainer);
     m_inspectorLayout->setContentsMargins(0, 0, 0, 0);
 
-    // プラグインエディタが上部に配置されるようストレッチを追加
-    m_inspectorLayout->addStretch();
-
-    centralLayout->addWidget(inspector);
+    centralSplitter->addWidget(inspectorContainer);
+    
+    // スプリッターの初期比率を設定 (例: 左 1 : 右 0 → インスペクターはINSPECTOR_WIDTHに初期設定)
+    centralSplitter->setSizes({1000, INSPECTOR_WIDTH});
 
     applyTheme(); // 初期テーマの適用
 }
@@ -99,9 +104,9 @@ void MixView::applyTheme()
     }
 
     // インスペクター領域
-    QWidget* inspector = m_inspectorLayout->parentWidget();
-    if (inspector) {
-        inspector->setStyleSheet(QString(R"(
+    QWidget* inspectorContainer = m_inspectorLayout->parentWidget();
+    if (inspectorContainer) {
+        inspectorContainer->setStyleSheet(QString(R"(
             background-color: %1;
             border-left: 1px solid %2;
         )").arg(Darwin::ThemeManager::instance().backgroundColor().name(),
@@ -208,6 +213,9 @@ void MixView::buildMixerChannels()
 
     connectPlaybackMetering(master);
     m_mixerLayout->addWidget(master);
+
+    // 追加: 余った領域を埋めるストレッチを入れることで、各チャンネルウィジェットが不必要に広がらないようにする
+    m_mixerLayout->addStretch();
 }
 
 /**
@@ -318,7 +326,8 @@ void MixView::onPluginEditorRequested(VST3PluginInstance* plugin)
     m_currentPluginEditor = new PluginEditorWidget(this);
 
     if (m_currentPluginEditor->openEditor(plugin)) {
-        m_inspectorLayout->insertWidget(INSERT_INDEX, m_currentPluginEditor);
+        // stretch=1 でレイアウト全体に広がるようにする
+        m_inspectorLayout->insertWidget(INSERT_INDEX, m_currentPluginEditor, 1);
         m_currentPluginEditor->show();
         m_currentPlugin = plugin;
     } else {

@@ -24,6 +24,7 @@
 #include <QDrag>
 #include <QMimeData>
 #include <QUrl>
+#include <QSettings>
 #include "../plugins/VST3Scanner.h"
 #include "../plugins/VST3PluginInstance.h"
 #include "common/ThemeManager.h"
@@ -510,10 +511,72 @@ void MixerChannelWidget::showFxPluginMenu()
 {
     if (!m_track) return;
     
+    // プラグイン使用履歴を読み込むヘルパー
+    auto loadUsageData = [](QVector<VST3PluginInfo>& plugins) {
+        QSettings settings(QSettings::IniFormat, QSettings::UserScope, "Darwin", "PluginUsage");
+        settings.beginGroup("UsageCount");
+        for (auto& plugin : plugins) {
+            QString key = QString(plugin.path.toUtf8().toBase64());
+            plugin.usageCount = settings.value(key, 0).toInt();
+        }
+        settings.endGroup();
+    };
+
+    // プラグイン使用履歴を保存するヘルパー
+    auto saveUsageData = [](const QString& pluginPath) {
+        QSettings settings(QSettings::IniFormat, QSettings::UserScope, "Darwin", "PluginUsage");
+        settings.beginGroup("UsageCount");
+        QString key = QString(pluginPath.toUtf8().toBase64());
+        int currentCount = settings.value(key, 0).toInt();
+        settings.setValue(key, currentCount + 1);
+        settings.endGroup();
+        settings.sync();
+    };
+
     if (!s_hasScanned) {
-        QProgressDialog progress("Scanning VST3 Plugins...", "Cancel", 0, 0, this);
+        // テーマに合わせたスキャンダイアログを作成
+        bool isDark = Darwin::ThemeManager::instance().isDarkMode();
+        QString dlgBg     = isDark ? "#1e293b" : "#ffffff";
+        QString dlgText   = isDark ? "#e2e8f0" : "#1e293b";
+        QString dlgBorder = isDark ? "#334155" : "#cbd5e1";
+        QString dlgSec    = isDark ? "#94a3b8" : "#64748b";
+
+        QProgressDialog progress("Scanning VST3 Plugins...", QString(), 0, 0, this);
+        progress.setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
         progress.setWindowModality(Qt::WindowModal);
         progress.setMinimumDuration(0);
+        progress.setMinimumSize(280, 80);
+        progress.setMaximumSize(280, 80);
+        progress.setCancelButton(nullptr); // キャンセルボタン不要
+        progress.setStyleSheet(QString(R"(
+            QProgressDialog {
+                background-color: %1;
+                border: 1px solid %2;
+                border-radius: 12px;
+                padding: 16px;
+            }
+            QLabel {
+                color: %3;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.5px;
+                background: transparent;
+            }
+            QProgressBar {
+                border: 1px solid %2;
+                border-radius: 4px;
+                background-color: %4;
+                text-align: center;
+                color: %5;
+                font-size: 10px;
+                max-height: 6px;
+            }
+            QProgressBar::chunk {
+                background-color: #FF3366;
+                border-radius: 3px;
+            }
+        )").arg(dlgBg, dlgBorder, dlgText, isDark ? "#0f172a" : "#f1f5f9", dlgSec));
         progress.setValue(1); // Force show
         progress.show();
         QApplication::processEvents();
@@ -529,6 +592,15 @@ void MixerChannelWidget::showFxPluginMenu()
         progress.close();
         QApplication::processEvents(); // Allow progress dialog to fully close and focus to return
     }
+
+    // メニュー表示のたびに最新の利用回数を反映してソート
+    loadUsageData(s_cachedPlugins);
+    std::sort(s_cachedPlugins.begin(), s_cachedPlugins.end(), [](const VST3PluginInfo& a, const VST3PluginInfo& b) {
+        if (a.usageCount != b.usageCount) {
+            return a.usageCount > b.usageCount;
+        }
+        return a.name.toLower() < b.name.toLower();
+    });
 
     QMenu* menu = new QMenu(this);
     menu->setAttribute(Qt::WA_DeleteOnClose);
@@ -556,8 +628,6 @@ void MixerChannelWidget::showFxPluginMenu()
     
     for (const auto& info : s_cachedPlugins) {
         if (info.isEffect) {
-            qDebug() << "Adding FX Plugin to Menu:" << info.name << "Path:" << info.path;
-            
             // Set a fallback name if empty
             QString displayName = info.name.trimmed();
             if (displayName.isEmpty()) {
@@ -568,7 +638,19 @@ void MixerChannelWidget::showFxPluginMenu()
             }
             
             QAction* action = menu->addAction(displayName);
-            connect(action, &QAction::triggered, this, [this, info]() {
+            connect(action, &QAction::triggered, this, [this, info, saveUsageData]() {
+                // 利用回数をインクリメントして保存
+                saveUsageData(info.path);
+                
+                // 次のメニュー表示時にソート結果を反映させるためキャッシュ側の一時カウントも更新
+                // （厳密には次回メニュー表示時に file から再ロードされるため不要だが安全のため）
+                for (auto& cached : s_cachedPlugins) {
+                    if (cached.path == info.path) {
+                        cached.usageCount++;
+                        break;
+                    }
+                }
+
                 // FX追加前のインデックスを記録
                 m_pendingFxHighlight = m_track->fxPlugins().size();
                 m_track->addFxPlugin(info.path);

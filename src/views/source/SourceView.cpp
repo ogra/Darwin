@@ -173,38 +173,7 @@ void SourceView::setupUi()
     
     m_instrumentList = new QListWidget(listContainer);
     m_instrumentList->setFocusPolicy(Qt::NoFocus); // フォーカス枠線を防止
-    m_instrumentList->setStyleSheet(QString(R"(
-        QListWidget {
-            border: none;
-            background-color: transparent;
-            font-family: 'Segoe UI', sans-serif;
-            font-size: 12px;
-            outline: none;
-        }
-        QListWidget::item {
-            padding: 10px 12px;
-            border: 1px solid %3;
-            border-radius: 4px;
-            margin-bottom: 2px;
-            color: %1;
-            outline: none;
-        }
-        QListWidget::item:selected {
-            background-color: %4;
-            border: 1px solid #FF3366;
-            color: %1;
-        }
-        QListWidget::item:hover:!selected {
-            border-color: %2;
-        }
-        QListWidget::item:focus {
-            outline: none;
-            border: 1px solid #FF3366;
-        }
-    )").arg(Darwin::ThemeManager::instance().textColor().name(),
-            Darwin::ThemeManager::instance().gridLineSubBeatColor().name(),
-            Darwin::ThemeManager::instance().backgroundColor().name(),
-            Darwin::ThemeManager::instance().isDarkMode() ? "#3f1a26" : "#fff0f3"));
+    // リストのスタイル設定は applyTheme() に委譲
     
     // スピナーをリスト上に重ねて中央配置
     m_scanSpinner = new ScanSpinnerWidget(listContainer);
@@ -381,6 +350,52 @@ void SourceView::applyTheme()
                 tm.gridLineColor().name(),
                 tm.secondaryTextColor().name()));
     }
+
+    if (m_instrumentList) {
+        m_instrumentList->setStyleSheet(QString(R"(
+            QListWidget {
+                border: none;
+                background-color: transparent;
+                font-family: 'Segoe UI', sans-serif;
+                font-size: 12px;
+                outline: none;
+            }
+            QListWidget::item {
+                padding: 10px 12px;
+                border: 1px solid %3;
+                border-radius: 4px;
+                margin-bottom: 2px;
+                color: %1;
+                outline: none;
+            }
+            QListWidget::item:selected {
+                background-color: %4;
+                border: 1px solid #FF3366;
+                color: %1;
+            }
+            QListWidget::item:hover:!selected {
+                border-color: %2;
+            }
+            QListWidget::item:focus {
+                outline: none;
+                border: 1px solid #FF3366;
+            }
+        )").arg(tm.textColor().name(),
+                tm.gridLineSubBeatColor().name(),
+                tm.backgroundColor().name(),
+                tm.isDarkMode() ? "#3f1a26" : "#fff0f3"));
+        
+        // 強制的にリストアイテムのテキスト色も更新する
+        for (int i = 0; i < m_instrumentList->count(); ++i) {
+            QListWidgetItem* item = m_instrumentList->item(i);
+            if (item) {
+                // リビール中の場合は透明になっている可能性があるため、完全な透明でない場合のみ更新
+                if (item->foreground().color().alpha() > 0) {
+                    item->setForeground(tm.textColor());
+                }
+            }
+        }
+    }
 }
 
 void SourceView::rescanPlugins()
@@ -466,7 +481,7 @@ void SourceView::onLoadButtonClicked()
     if (m_isLoading) return; // ダブルクリック防止
     
     if (m_selectedIndex >= 0 && m_selectedIndex < m_plugins.size()) {
-        const VST3PluginInfo& info = m_plugins[m_selectedIndex];
+        const VST3PluginInfo info = m_plugins[m_selectedIndex];
         m_isLoading = true;
         
         // 使用回数をインクリメント

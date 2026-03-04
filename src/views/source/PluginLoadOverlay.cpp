@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <cmath>
+#include "common/ThemeManager.h"
 
 // ─── PluginLoadOverlay ───────────────────────────────────
 
@@ -104,11 +105,19 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
     float se  = static_cast<float>(now - m_stageStartMs);
     float ga  = m_overlayAlpha;
 
-    // ── 白背景 ──
+    QColor ovBg = Darwin::ThemeManager::instance().backgroundColor();
+    QColor ovBorder = Darwin::ThemeManager::instance().borderColor();
+    QColor ovText = Darwin::ThemeManager::instance().textColor();
+    QColor ovSub = Darwin::ThemeManager::instance().secondaryTextColor();
+    QColor ovAccent = Darwin::ThemeManager::instance().isDarkMode() ? QColor(255, 51, 102) : QColor(255, 51, 102); // Keep brand color
+    QColor ovSuccess = QColor(34, 197, 94);
+    QColor ovFailure = QColor(239, 68, 68);
+
+    // ── 背景 ──
     p.save();
     p.setOpacity(ga * 0.96);
     p.setPen(Qt::NoPen);
-    p.setBrush(kOvBg);
+    p.setBrush(ovBg);
     p.drawRect(rect());
     p.restore();
 
@@ -124,7 +133,7 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
 
         // プラグイン名
         p.setFont(titleFont);
-        p.setPen(kOvText);
+        p.setPen(ovText);
         QRectF nameRect(0, center.y() - 80, width(), 28);
         p.drawText(nameRect, Qt::AlignCenter, m_pluginName);
 
@@ -133,7 +142,7 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
         float penW   = 3.0f;
 
         // 背景リング
-        p.setPen(QPen(kOvBorder, penW, Qt::SolidLine, Qt::RoundCap));
+        p.setPen(QPen(ovBorder, penW, Qt::SolidLine, Qt::RoundCap));
         p.setBrush(Qt::NoBrush);
         p.drawEllipse(center, outerR, outerR);
 
@@ -141,14 +150,14 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
         float sweepDeg = 90.0f + 60.0f * std::sin(m_progressSweep * 6.2832f);
         QRectF arcRect(center.x() - outerR, center.y() - outerR,
                        outerR * 2, outerR * 2);
-        p.setPen(QPen(kOvAccent, penW, Qt::SolidLine, Qt::RoundCap));
+        p.setPen(QPen(ovAccent, penW, Qt::SolidLine, Qt::RoundCap));
         p.drawArc(arcRect,
                   static_cast<int>(m_spinnerAngle * 16),
                   static_cast<int>(sweepDeg * 16));
 
         // サブテキスト
         p.setFont(subFont);
-        p.setPen(kOvSub);
+        p.setPen(ovSub);
         p.drawText(QRectF(0, center.y() + 34, width(), 22),
                    Qt::AlignCenter, "Loading instrument\u2026");
 
@@ -166,7 +175,7 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
             QRectF bar(startX + i * (barW + barSpacing),
                        barBaseY - h / 2.0f, barW, h);
 
-            QColor bc = kOvAccent;
+            QColor bc = ovAccent;
             bc.setAlphaF(0.35f + 0.35f * std::abs(std::sin(phase)));
             p.setPen(Qt::NoPen);
             p.setBrush(bc);
@@ -185,7 +194,7 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
 
         // 緑サークル
         float circleR = 22.0f * ease;
-        QColor cc = kOvSuccess;
+        QColor cc = ovSuccess;
         cc.setAlphaF(ease * 0.9f);
         p.setPen(Qt::NoPen);
         p.setBrush(cc);
@@ -215,7 +224,7 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
         // リングパルス
         if (t < 1.0f) {
             float rp = 22.0f + t * 40.0f;
-            QColor ring = kOvSuccess;
+            QColor ring = ovSuccess;
             ring.setAlphaF((1.0f - t) * 0.3f);
             p.setPen(QPen(ring, 1.5f * (1.0f - t)));
             p.setBrush(Qt::NoBrush);
@@ -225,14 +234,14 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
         // テキスト
         float ta = qBound(0.0f, (se - 200.0f) / 300.0f, 1.0f);
         p.setFont(titleFont);
-        QColor tc = kOvText;
+        QColor tc = ovText;
         tc.setAlphaF(ta);
         p.setPen(tc);
         p.drawText(QRectF(0, center.y() + 38, width(), 28),
                    Qt::AlignCenter, "Loaded");
 
         p.setFont(subFont);
-        QColor sc = kOvSub;
+        QColor sc = ovSub;
         sc.setAlphaF(ta);
         p.setPen(sc);
         p.drawText(QRectF(0, center.y() + 60, width(), 20),
@@ -250,7 +259,7 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
 
         // 赤サークル
         float circleR = 22.0f * ease;
-        QColor cc = kOvFailure;
+        QColor cc = ovFailure;
         cc.setAlphaF(ease * 0.9f);
         p.setPen(Qt::NoPen);
         p.setBrush(cc);
@@ -269,7 +278,7 @@ void PluginLoadOverlay::paintEvent(QPaintEvent*)
         // テキスト
         float ta = qBound(0.0f, (se - 200.0f) / 350.0f, 1.0f);
         p.setFont(subFont);
-        QColor ftc = kOvFailure;
+        QColor ftc = ovFailure;
         ftc.setAlphaF(ta * 0.9f);
         p.setPen(ftc);
         QString msg = m_failReason.isEmpty() ? "Failed to load plugin" : m_failReason;
